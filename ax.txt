@@ -1,0 +1,16 @@
+def low_up_fun(low,up):
+    def f(last_yield, last_total_bid, s1, s2, s3):
+        if last_yield == -1:
+            s1=5
+            s2=5.0*np.log(100.0)
+        else:
+            s1 = s1 + 1
+            now = np.log( last_yield+1 )
+            if now<low:
+                now=low
+            if now>up:
+                now=up
+            s2 = s2 + now
+        bid = int((np.exp(s2/s1)-1.0)/7 - 0.5)
+        return (bid,s1,s2,s3)
+    return f

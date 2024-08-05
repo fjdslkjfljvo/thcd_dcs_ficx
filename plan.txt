@@ -1,0 +1,6 @@
+time is one param of the strat function
+check market impact, max_size, max_pos ...
+if max_pos>max_size, consider how to reach max_pos
+check input frequency, 10min? 5min?
+check input when market is closed, maybe only keep one value?
+consider how to avoid large hbas

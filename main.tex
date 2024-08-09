@@ -3,7 +3,7 @@
 % % \usetheme{Marburg}
 % \usecolortheme{orchid}
 
-\documentclass[10pt]{beamer}
+\documentclass[9pt]{beamer}
 
 \usetheme{Singapore}
 
@@ -13,6 +13,7 @@
 \usepackage{algorithm}
 \usepackage{algorithmic}
 \usepackage{natbib}
+\usepackage{nicefrac}
 \usepackage{color}
 \usepackage{algorithm}
 \usepackage{algorithmic}
@@ -21,6 +22,7 @@
 \usepackage{amsthm,multirow,commath}
 \usepackage{xcolor}
 \usepackage{subcaption} % Needed for subfigure captions
+
 
 \usepackage{sansmathaccent}
 \pdfmapfile{+sansmathaccent.map}
@@ -54,10 +56,18 @@
 
 
 
-\title[]{Title} % The short title appears at the bottom of every slide, the full title is only on the title page
+\title[]{Non-linear model with heterogeneous features} % The short title appears at the bottom of every slide, the full title is only on the title page
 
 
-\author{}
+\author{
+{ \footnotesize
+Mentor: Logan\\
+Committee: Shengming, Lu
+}
+\\
+\vspace{5mm}
+Zhihao Jiang
+}
 
 \date{August 9, 2024}
 
@@ -75,20 +85,20 @@
 \begin{frame}{Overview}
 
 
-Market data and 123xx features, from 2021 to 2024-06, xx datapoints.
+Given market data and 200+ features.
 \begin{itemize}
-    \item BBO, volume, hour, s.trade, ema\_diff, emd, \emph{etc.}
+    \item from 2021 to 2024-06, every second, 36M datapoints
+    \item mid price, hbas
+    \item linear features: s.trade, emd\_spread, \emph{etc.}
+    \item non-linear features: hour, volume, \emph{etc.}
 \end{itemize}
-\pause
-Predict average forward return in 1-2 hours.
-\begin{itemize}
-    \item $\log\left(\frac{\text{average mid price in 1 to 2 hours}}{\text{current mid price}}\right)$
-\pause
-    \item linear regression, XGBoost, further adjustment for certain features
-\end{itemize}
-\pause
-Simulation, trade based on prediction.
 
+Objective: predict average forward return in 1-2 hours.
+\begin{itemize}
+    \item $\log\left(\frac{\text{average mid price 1-2 hours later}}{\text{current mid price}}\right)$
+\end{itemize}
+
+Contribution: feature selection, develop a tree-based model (XGBoost)
 
 
 
@@ -99,37 +109,48 @@ Simulation, trade based on prediction.
 
 \begin{itemize}
     \item Missing values. Forward fill prices.
-\pause
-    \item Resampling: resample every 5 seconds.
-\pause
+
+    \item Subsample every 5 seconds.
+
     \item Data Splitting
     \begin{itemize}
-        \item training: 2021-01 to 2022-xx
-        \item validation: 2023-xx to 2024-03-15
-        \item testing: 2024-03-15 to 2024-06
+        \item training: 2021-01 to 2022-03, 4 million, $58\%$
+        \item validation: 2023-08 to 2024-03-15, 2 million, $30\%$
+        \item testing: 2024-03-15 to 2024-06, 0.83 million, $12\%$
     \end{itemize}
-\pause
-    \item Standardization. $x=\frac{x-x.mean}{x.std}$.
-\pause
+
+    \item Standardization. $x\leftarrow \frac{x-x.mean}{x.std}$.
+
     \item Create new features, stats of existed features, combinations.
 \end{itemize}
 
 
 \end{frame}
 
+\begin{frame}{First attempts}
 
-\begin{frame}{Lasso}
+\begin{itemize}
+    \item Train an XGBoost model using all features
+    \item Sort features by importance, and select first $k$ features.
+    \item Forward selection.
+\end{itemize}
+
+
+\end{frame}
+
+
+\begin{frame}{Only linear features: Lasso}
 
 
 \begin{itemize}
-    \item Remove positive features, such as volume, hour.
+    \item Remove non-linear features, such as volume, hour.
     \item Train using training set, choose lasso parameter $\alpha$ that maximizes $r^2$ on validation set.
 \end{itemize}
 
 \begin{figure}
     \centering
     \includegraphics[width=0.5\textwidth]{fig/lasso_r2.png}
-    \caption{lasso $r^2$}
+    %\caption{lasso $r^2$}
 \end{figure}
 
 
@@ -138,26 +159,26 @@ Simulation, trade based on prediction.
 \begin{tabular}{c|c|c|c}
 \hline
  & \textbf{training} & \textbf{validation} & \textbf{testing} \\ \hline
-$r^2$      & Row 1, Col 2      & Row 1, Col 3      & Row 1, Col 4      \\ \hline
-correlation      & Row 1, Col 2      & Row 1, Col 3      & Row 1, Col 4      \\ \hline
+$r^2$      & 0.44\%      & 0.29\%      & 0.60\%    \\ \hline
 \end{tabular}
 \end{table}
 
 
 \end{frame}
 
-\begin{frame}{Select features by t-values}
+\begin{frame}{ Only linear features: Select features by t-values}
 
 \begin{itemize}
-    \item Again, remove positive features, such as volume, hour.
+    \item Fit linear regression using all linear features.
+    \item Calculate $t$-values of each feature. $t_i\propto \nicefrac{\beta_i}{SE(\beta_i)}$
     \item Remove highly correlated features.
     \item Sort features by t-values in linear regression, from high to low.
     \item Train a ridge regression model using first $k$ features.
 \end{itemize}
 \begin{figure}
     \centering
-    \includegraphics[width=0.5\textwidth]{fig/lasso_r2.png}
-    \caption{t-value $r^2$}
+    \includegraphics[width=0.5\textwidth]{fig/ridge_r2.png}
+    %\caption{t-value $r^2$}
 \end{figure}
 
 
@@ -166,283 +187,263 @@ correlation      & Row 1, Col 2      & Row 1, Col 3      & Row 1, Col 4      \\ 
 \begin{tabular}{c|c|c|c}
 \hline
  & \textbf{training} & \textbf{validation} & \textbf{testing} \\ \hline
-$r^2$      & Row 1, Col 2      & Row 1, Col 3      & Row 1, Col 4      \\ \hline
-correlation      & Row 1, Col 2      & Row 1, Col 3      & Row 1, Col 4      \\ \hline
+$r^2$      & 0.39\%      & 0.35\%     & 0.60\%      \\ \hline
 \end{tabular}
 \end{table}
 
 
 \end{frame}
-
-\begin{frame}{XGBoost model}
-
-
-\begin{itemize}
-    \item Train a model using all the features
-    \item Using features selected in linear regression
-    \item Linear regression predictions as features
-    \item Add positive features by feature importance
-\end{itemize}
-
-
-\begin{figure}
-    \centering
-    \includegraphics[width=0.5\textwidth]{fig/lasso_r2.png}
-    \caption{feature importance}
-\end{figure}
-
-
-\begin{table}[h!]
-\centering
-\begin{tabular}{c|c|c|c}
-\hline
- & \textbf{training} & \textbf{validation} & \textbf{testing} \\ \hline
-$r^2$      & Row 1, Col 2      & Row 1, Col 3      & Row 1, Col 4      \\ \hline
-correlation      & Row 1, Col 2      & Row 1, Col 3      & Row 1, Col 4      \\ \hline
-\end{tabular}
-\end{table}
-
-
-\end{frame}
-
-\begin{frame}{Hyperparameter tuning}
-
-
-\begin{itemize}
-    \item Train a model using all the features
-    \item Using features selected in linear regression
-    \item Linear regression predictions as features
-    \item Add positive features by feature importance
-\end{itemize}
-
-
-\begin{figure}
-    \centering
-    \includegraphics[width=0.5\textwidth]{fig/lasso_r2.png}
-    \caption{feature importance}
-\end{figure}
-
-
-\begin{table}[h!]
-\centering
-\begin{tabular}{c|c|c|c}
-\hline
- & \textbf{training} & \textbf{validation} & \textbf{testing} \\ \hline
-$r^2$      & Row 1, Col 2      & Row 1, Col 3      & Row 1, Col 4      \\ \hline
-correlation      & Row 1, Col 2      & Row 1, Col 3      & Row 1, Col 4      \\ \hline
-\end{tabular}
-\end{table}
-
-
-\end{frame}
-
-\begin{frame}{Side result: a simple tree model}
-
-
-
-
-\begin{figure}
-    \centering
-    \includegraphics[width=0.5\textwidth]{fig/lasso_r2.png}
-    \caption{the simple tree model}
-\end{figure}
-
-\begin{table}[h!]
-\centering
-\begin{tabular}{c|c|c|c}
-\hline
- & \textbf{training} & \textbf{validation} & \textbf{testing} \\ \hline
-$r^2$      & Row 1, Col 2      & Row 1, Col 3      & Row 1, Col 4      \\ \hline
-correlation      & Row 1, Col 2      & Row 1, Col 3      & Row 1, Col 4      \\ \hline
-\end{tabular}
-\end{table}
-
-\end{frame}
-
-
-\begin{frame}{Simulation}
-
-Strategy,
-
-
-\begin{figure}
-    \centering
-    \includegraphics[width=0.5\textwidth]{fig/lasso_r2.png}
-    \caption{demonstrate strategy, explain trade, size}
-\end{figure}
-
-Parameters: 
-
-
-\end{frame}
-
-\begin{frame}{Simulation, Lasso}
-
-
-\begin{figure}[h!]
-    \centering
-    \begin{subfigure}[b]{0.3\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{fig/lasso_r2.png}
-        \caption{Caption for Figure 1}
-        \label{fig:figure1}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[b]{0.3\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{fig/lasso_r2.png}
-        \caption{Caption for Figure 2}
-        \label{fig:figure2}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[b]{0.3\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{fig/lasso_r2.png}
-        \caption{Caption for Figure 3}
-        \label{fig:figure3}
-    \end{subfigure}
-    \caption{Main caption for the three figures.}
-    \label{fig:three_figures}
-\end{figure}
-
-
-\begin{table}[h!]
-\centering
-\begin{tabular}{c|c|c|c}
-\hline
- & \textbf{training} & \textbf{validation} & \textbf{testing} \\ \hline
-trade per day      & Row 1, Col 2      & Row 1, Col 3      & Row 1, Col 4      \\ \hline
-pnl per size      & Row 1, Col 2      & Row 1, Col 3      & Row 1, Col 4      \\ \hline
-sharpe      & Row 1, Col 2      & Row 1, Col 3      & Row 1, Col 4      \\ \hline
-\end{tabular}
-\end{table}
-
-
-\end{frame}
-
-
-\begin{frame}{Simulation, Ridge with features selected by t-values}
-
-
-\begin{figure}[h!]
-    \centering
-    \begin{subfigure}[b]{0.3\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{fig/lasso_r2.png}
-        \caption{Caption for Figure 1}
-        \label{fig:figure1}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[b]{0.3\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{fig/lasso_r2.png}
-        \caption{Caption for Figure 2}
-        \label{fig:figure2}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[b]{0.3\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{fig/lasso_r2.png}
-        \caption{Caption for Figure 3}
-        \label{fig:figure3}
-    \end{subfigure}
-    \caption{Main caption for the three figures.}
-    \label{fig:three_figures}
-\end{figure}
-
-
-\begin{table}[h!]
-\centering
-\begin{tabular}{c|c|c|c}
-\hline
- & \textbf{training} & \textbf{validation} & \textbf{testing} \\ \hline
-trade per day      & Row 1, Col 2      & Row 1, Col 3      & Row 1, Col 4      \\ \hline
-pnl per size      & Row 1, Col 2      & Row 1, Col 3      & Row 1, Col 4      \\ \hline
-sharpe      & Row 1, Col 2      & Row 1, Col 3      & Row 1, Col 4      \\ \hline
-\end{tabular}
-\end{table}
-
-
-\end{frame}
-
-\begin{frame}{Simulation, tree model}
-
-
-\begin{figure}[h!]
-    \centering
-    \begin{subfigure}[b]{0.3\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{fig/lasso_r2.png}
-        \caption{Caption for Figure 1}
-        \label{fig:figure1}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[b]{0.3\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{fig/lasso_r2.png}
-        \caption{Caption for Figure 2}
-        \label{fig:figure2}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[b]{0.3\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{fig/lasso_r2.png}
-        \caption{Caption for Figure 3}
-        \label{fig:figure3}
-    \end{subfigure}
-    \caption{Main caption for the three figures.}
-    \label{fig:three_figures}
-\end{figure}
-
-
-\begin{table}[h!]
-\centering
-\begin{tabular}{c|c|c|c}
-\hline
- & \textbf{training} & \textbf{validation} & \textbf{testing} \\ \hline
-trade per day      & Row 1, Col 2      & Row 1, Col 3      & Row 1, Col 4      \\ \hline
-pnl per size      & Row 1, Col 2      & Row 1, Col 3      & Row 1, Col 4      \\ \hline
-sharpe      & Row 1, Col 2      & Row 1, Col 3      & Row 1, Col 4      \\ \hline
-\end{tabular}
-\end{table}
-
-
-\end{frame}
-
 
 
 \begin{frame}{Scale prediction by hour}
 
 
 
-\begin{figure}
-    \centering
-    \includegraphics[width=0.5\textwidth]{fig/lasso_r2.png}
-    \caption{scales}
-\end{figure}
-
 \begin{itemize}
-    \item For hour $i$, $a_i \leftarrow \beta_i a_i$
-    \item $\beta_i = $
-    \item Using features selected in linear regression
-    \item Linear regression predictions as features
-    \item Add positive features by feature importance
+	\item label $y$, prediction $\alpha$
+	\item rescale prediction to be $c\cdot \alpha$, $c=\frac{\alpha^T y}{\alpha^T \alpha}$ maximizes $r^2$
+    \item For each hour $i$, calculate the optimal $c_i$ for scaling prediction in this hour
 \end{itemize}
 
+\begin{figure}
+    \centering
+    \includegraphics[width=0.5\textwidth]{fig/hour_scale.png}
+    %\caption{scales}
+\end{figure}
+
+
+
+\end{frame}
+
+
+\begin{frame}{Scale prediction by hour}
+
+\begin{itemize}
+    \item final scaling factor $c^{*}_i = 1.0+a\cdot (c_i-1.0)^{b}$, where $a,b$ maximizes $r^2$ on the validation set
+\end{itemize}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.5\textwidth]{fig/hour_full.png}
+    %\caption{scales}
+\end{figure}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{c|c|c|c}
+\hline
+$r^2$ & \textbf{training} & \textbf{validation} & \textbf{testing} \\ \hline
+lasso before scaling      & 0.44\%      & 0.29\%      & 0.60\%      \\ \hline
+lasso after scaling      & 0.81\%      & 0.48\%      & 0.90\%      \\ \hline
+%tree before scaling      & 0.81\%      & 0.39\%      & 0.83\%      \\ \hline
+%tree after scaling      & 1.08\%      & 0.43\%      & 0.96\%      \\ \hline
+\end{tabular}
+\end{table}
+
+
+
+\end{frame}
+
+
+
+
+\begin{frame}{Tree-based model: XGBoost}
+
+
+\begin{itemize}
+    \item Using features selected in linear regression (both lasso and t-values)
+    \item Linear regression predictions as features
+    \item Removing original linear features make it better
+    \item Add non-linear features by feature importance
+    \begin{itemize}
+        \item ave\_volume\_2h, ave\_sell\_volume\_2h, return\_from\_high\_6h, return\_from\_low\_30min, ave\_volume\_diff\_2h, hour
+    \end{itemize}
+\end{itemize}
+
+
+
+\end{frame}
+
+
+
+
+\begin{frame}{Simple tree}
+
+
+\begin{figure}
+    \centering
+    \includegraphics[width=1.0\textwidth]{fig/simple_tree.png}
+    %\caption{scales}
+\end{figure}
 
 \begin{table}[h!]
 \centering
 \begin{tabular}{c|c|c|c}
 \hline
  & \textbf{training} & \textbf{validation} & \textbf{testing} \\ \hline
-trade per day      & Row 1, Col 2      & Row 1, Col 3      & Row 1, Col 4      \\ \hline
-pnl per size      & Row 1, Col 2      & Row 1, Col 3      & Row 1, Col 4      \\ \hline
-sharpe      & Row 1, Col 2      & Row 1, Col 3      & Row 1, Col 4      \\ \hline
+$r^2$      & 0.58\%      & 0.34\%      & 0.32\%      \\ \hline
+\end{tabular}
+\end{table}
+
+
+
+\end{frame}
+
+
+
+\begin{frame}{Hyperparameter tune}
+
+
+\begin{figure}[h!]
+    \centering
+    \begin{subfigure}[b]{0.475\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/tune_lambda.png}
+        %\caption{Caption for Figure 1}
+        \label{fig:figure1}
+    \end{subfigure}
+    \begin{subfigure}[b]{0.475\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/tune_subsample.png}
+        %\caption{Caption for Figure 2}
+        \label{fig:figure2}
+    \end{subfigure}
+    %\caption{Main caption for the three figures.}
+    \label{fig:three_figures}
+\end{figure}
+
+
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{c|c|c|c}
+\hline
+$r^2$ & \textbf{training} & \textbf{validation} & \textbf{testing} \\ \hline
+tree      & 0.81\%      & 0.39\%      & 0.83\%      \\ \hline
+linear     & 0.44\%      & 0.29\%      & 0.60\%      \\ \hline
+\end{tabular}
+\end{table}
+
+
+
+\end{frame}
+
+
+
+\begin{frame}{Hyperparameter tune}
+
+
+
+\begin{figure}[h!]
+    \centering
+    \begin{subfigure}[b]{0.475\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/tune_lambda.png}
+        %\caption{Caption for Figure 1}
+        \label{fig:figure1}
+    \end{subfigure}
+    \begin{subfigure}[b]{0.475\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/tune_subsample.png}
+        %\caption{Caption for Figure 2}
+        \label{fig:figure2}
+    \end{subfigure}
+    %\caption{Main caption for the three figures.}
+    \label{fig:three_figures}
+\end{figure}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{c|c|c|c}
+\hline
+$r^2$ & \textbf{training} & \textbf{validation} & \textbf{testing} \\ \hline
+tree      & 1.08\%      & 0.43\%      & 0.96\%       \\ \hline
+linear     & 0.81\%      & 0.48\%      & 0.90\%     \\ \hline
+\end{tabular}
+\end{table}
+
+\end{frame}
+
+
+
+
+\begin{frame}{Simulation}
+
+Strategy:
+\begin{itemize}
+    \item If predicted move $p>0$
+    \item Target position is $\text{tp} = c\cdot p-\text{hbas} - thr$
+    \item $\text{tp}\leftarrow \min\left\{\max\left\{\text{tp}, 0, \text{cur\_pos}\right\}, bnd \right\}$
+\end{itemize}
+
+
+
+Find parameters that maximize performance on the training and validation set
+\begin{itemize}
+    \item $[\text{trade/day}>1.5]\cdot [\text{PnL/size}>0.3]\cdot \text{sharpe}$
+\end{itemize}
+
+
+\end{frame}
+
+\begin{frame}{Simulation}
+
+
+\begin{figure}[h!]
+    \centering
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/simu_1.png}
+        %\caption{Caption for Figure 1}
+        \label{fig:figure1}
+    \end{subfigure}
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/simu_2.png}
+        %\caption{Caption for Figure 2}
+        \label{fig:figure2}
+    \end{subfigure}
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/simu_3.png}
+        %\caption{Caption for Figure 3}
+        \label{fig:figure3}
+    \end{subfigure}
+    %\caption{Main caption for the three figures.}
+    \label{fig:three_figures}
+\end{figure}
+
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{c|c|c|c}
+\hline
+sharpe & \textbf{training} & \textbf{validation} & \textbf{testing} \\ \hline
+tree      & 5.32      & 2.04    & 3.73      \\ \hline
+linear     & 3.18      & 1.29      & 2.34     \\ \hline
 \end{tabular}
 \end{table}
 
 
 \end{frame}
+
+
+
+\begin{frame}{Potential future directions}
+
+
+
+\begin{itemize}
+    \item Only consider data with emd\_4h$>50\%$, lasso provides larger $r^2$.
+    \item Different horizons
+    \item Trade $A-\beta B$
+\end{itemize}
+
+\end{frame}
+
+
+
+
 
 
 
@@ -457,6 +458,48 @@ sharpe      & Row 1, Col 2      & Row 1, Col 3      & Row 1, Col 4      \\ \hlin
 
 
 
+\begin{frame}{Predict forward return in 2-3 hours}
+
+
+\begin{figure}[h!]
+    \centering
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/simu_tree_2h_1.png}
+        %\caption{Caption for Figure 1}
+        \label{fig:figure1}
+    \end{subfigure}
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/simu_tree_2h_2.png}
+        %\caption{Caption for Figure 2}
+        \label{fig:figure2}
+    \end{subfigure}
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/simu_tree_2h_3.png}
+        %\caption{Caption for Figure 3}
+        \label{fig:figure3}
+    \end{subfigure}
+    %\caption{Main caption for the three figures.}
+    \label{fig:three_figures}
+\end{figure}
+
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{c|c|c|c}
+\hline
+ & \textbf{training} & \textbf{validation} & \textbf{testing} \\ \hline
+$r^2$      & 1.30\%      & 1.07\%     & 1.05\%      \\ \hline
+trade per day      & 2.15      & 2.33      & 3.03      \\ \hline
+pnl per size      & 2.66      & 1.5      & 1.62      \\ \hline
+sharpe      & 4.68      & 3.45      & 3.23     \\ \hline
+\end{tabular}
+\end{table}
+
+
+\end{frame}
 
 
 
